@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="es"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TransactionServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">transactionmicroservice</a> &gt; <a href="index.source.html" class="el_package">com.example.transactionmicroservice.service.impl</a> &gt; <span class="el_source">TransactionServiceImpl.java</span></div><h1>TransactionServiceImpl.java</h1><pre class="source lang-java linenums">package com.example.transactionmicroservice.service.impl;
+
+import com.example.transactionmicroservice.client.BankAccountClient;
+import com.example.transactionmicroservice.model.Transaction;
+import com.example.transactionmicroservice.model.TransactionType;
+import com.example.transactionmicroservice.repository.TransactionRepository;
+import com.example.transactionmicroservice.service.TransactionService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Service
+@RequiredArgsConstructor
+public class TransactionServiceImpl implements TransactionService {
+
+    private final TransactionRepository transactionRepository; // Repository to manage transactions in the database.
+    private final BankAccountClient bankAccountClient; // Client to interact with the Bank Account microservice.
+
+    /**
+     * Performs a deposit to a specified bank account.
+     *
+     * @param accountId The ID of the account where the deposit will be made.
+     * @param amount    The amount to deposit.
+     * @return A Mono containing the created deposit transaction.
+     */
+    @Override
+    public Mono&lt;Transaction&gt; deposit(String accountId, Double amount) {
+        // Call the Bank Account microservice to perform the deposit
+<span class="fc" id="L35">        return bankAccountClient.deposit(accountId, amount)</span>
+<span class="fc" id="L36">                .flatMap(updatedAccount -&gt; {</span>
+                    // Create a transaction record for the deposit
+<span class="fc" id="L38">                    Transaction transaction = Transaction.builder()</span>
+<span class="fc" id="L39">                            .type(TransactionType.DEPOSIT)</span>
+<span class="fc" id="L40">                            .amount(amount)</span>
+<span class="fc" id="L41">                            .date(LocalDateTime.now())</span>
+<span class="fc" id="L42">                            .destinationAccountId(accountId)</span>
+<span class="fc" id="L43">                            .build();</span>
+                    // Save the transaction in the database
+<span class="fc" id="L45">                    return transactionRepository.save(transaction);</span>
+                });
+    }
+
+    /**
+     * Performs a withdrawal from a specified bank account.
+     *
+     * @param accountId The ID of the account from which the withdrawal will be made.
+     * @param amount    The amount to withdraw.
+     * @return A Mono containing the created withdrawal transaction.
+     */
+    @Override
+    public Mono&lt;Transaction&gt; withdraw(String accountId, Double amount) {
+        // Retrieve the account details from the Bank Account microservice
+<span class="fc" id="L59">        return bankAccountClient.getAccount(accountId)</span>
+<span class="fc" id="L60">                .flatMap(account -&gt; {</span>
+                    // Verify if the account has sufficient balance
+<span class="fc" id="L62">                    BigDecimal balance = account.getBalance();</span>
+<span class="fc" id="L63">                    BigDecimal amountToWithdraw = BigDecimal.valueOf(amount);</span>
+<span class="fc bfc" id="L64" title="All 2 branches covered.">                    if (balance.compareTo(amountToWithdraw) &lt; 0) {</span>
+                        // Throw an error if the balance is insufficient
+<span class="fc" id="L66">                        return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, &quot;Insufficient balance&quot;));</span>
+                    }
+                    // Call the Bank Account microservice to perform the withdrawal
+<span class="fc" id="L69">                    return bankAccountClient.withdraw(accountId, amount);</span>
+                })
+<span class="fc" id="L71">                .flatMap(updatedAccount -&gt; {</span>
+                    // Create a transaction record for the withdrawal
+<span class="fc" id="L73">                    Transaction transaction = Transaction.builder()</span>
+<span class="fc" id="L74">                            .type(TransactionType.WITHDRAWAL)</span>
+<span class="fc" id="L75">                            .amount(amount)</span>
+<span class="fc" id="L76">                            .date(LocalDateTime.now())</span>
+<span class="fc" id="L77">                            .sourceAccountId(accountId)</span>
+<span class="fc" id="L78">                            .build();</span>
+                    // Save the transaction in the database
+<span class="fc" id="L80">                    return transactionRepository.save(transaction);</span>
+                });
+    }
+
+    /**
+     * Performs a transfer between two bank accounts.
+     *
+     * @param sourceAccountId      The ID of the account from which the funds will be transferred.
+     * @param destinationAccountId The ID of the account to which the funds will be transferred.
+     * @param amount               The amount to transfer.
+     * @return A Mono containing the created transfer transaction.
+     */
+    @Override
+    public Mono&lt;Transaction&gt; transfer(String sourceAccountId, String destinationAccountId, Double amount) {
+        // Retrieve the source account details from the Bank Account microservice
+<span class="fc" id="L95">        return bankAccountClient.getAccount(sourceAccountId)</span>
+<span class="fc" id="L96">                .flatMap(sourceAccount -&gt; {</span>
+                    // Verify if the source account has sufficient balance
+<span class="fc" id="L98">                    BigDecimal balance = sourceAccount.getBalance();</span>
+<span class="fc" id="L99">                    BigDecimal amountToWithdraw = BigDecimal.valueOf(amount);</span>
+<span class="fc bfc" id="L100" title="All 2 branches covered.">                    if (balance.compareTo(amountToWithdraw) &lt; 0) {</span>
+                        // Throw an error if the balance is insufficient
+<span class="fc" id="L102">                        return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, &quot;Insufficient balance&quot;));</span>
+                    }
+                    // Call the Bank Account microservice to perform the withdrawal from the source account
+<span class="fc" id="L105">                    return bankAccountClient.withdraw(sourceAccountId, amount);</span>
+                })
+<span class="fc" id="L107">                .flatMap(updatedSourceAccount -&gt; {</span>
+                    // Call the Bank Account microservice to perform the deposit into the destination account
+<span class="fc" id="L109">                    return bankAccountClient.deposit(destinationAccountId, amount);</span>
+                })
+<span class="fc" id="L111">                .flatMap(updatedDestinationAccount -&gt; {</span>
+                    // Create a transaction record for the transfer
+<span class="fc" id="L113">                    Transaction transaction = Transaction.builder()</span>
+<span class="fc" id="L114">                            .type(TransactionType.TRANSFER)</span>
+<span class="fc" id="L115">                            .amount(amount)</span>
+<span class="fc" id="L116">                            .date(LocalDateTime.now())</span>
+<span class="fc" id="L117">                            .sourceAccountId(sourceAccountId)</span>
+<span class="fc" id="L118">                            .destinationAccountId(destinationAccountId)</span>
+<span class="fc" id="L119">                            .build();</span>
+                    // Save the transaction in the database
+<span class="fc" id="L121">                    return transactionRepository.save(transaction);</span>
+                });
+    }
+
+    /**
+     * Retrieves the global transaction history.
+     *
+     * @return A Flux containing all transactions sorted by date in descending order.
+     */
+    @Override
+    public Flux&lt;Transaction&gt; getGlobalTransactionHistory() {
+        // Retrieve all transactions from the database, sorted by date in descending order
+<span class="fc" id="L133">        return transactionRepository.findAllByOrderByDateDesc();</span>
+    }
+
+    /**
+     * Retrieves the transaction history for a specific account.
+     *
+     * @param accountId The ID of the account whose transaction history is to be retrieved.
+     * @return A Flux containing all transactions related to the specified account, sorted by date in descending order.
+     */
+    @Override
+    public Flux&lt;Transaction&gt; getAccountTransactionHistory(String accountId) {
+        // Retrieve all transactions related to the specified account from the database
+<span class="fc" id="L145">        return transactionRepository.findBySourceAccountIdOrDestinationAccountIdOrderByDateDesc(accountId, accountId);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>
